@@ -4,10 +4,10 @@ precision mediump float;
 
 uniform sampler2D textureUnit;
 
-in vec2 vTex;
+smooth in vec2 vTex;
 
 out vec4 gl_FragColor;
 
 void main(void){
-    gl_FragColor = vec4(texture2D(textureUnit, vTex));
+    gl_FragColor = vec4(texture(textureUnit,vTex));
 }

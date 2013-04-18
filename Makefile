@@ -3,7 +3,7 @@ CC = g++
 INCDIRS = -I/home/ego/libs/berkelium/include/ -I/home/ego/projects/personal/gliby/include/
 CXXFLAGS = $(COMPILERFLAGS) -O3 -march=native -pipe -std=c++0x -Wall -g $(INCDIRS)
 CFLAGS = -g $(INCDIRS)
-LIBS = -L/home/ego/libs/berkelium/ -lGL -lGLU -lGLEW -lglfw -lboost_system -lboost_filesystem -pthread -llibberkelium_d -lIL -lILU -lILUT
+LIBS = -L/home/ego/libs/berkelium/ -lGL -lGLU -lGLEW -lglfw -lboost_system -lboost_filesystem -pthread -llibberkelium_d
 
 prog :  $(MAIN)
 

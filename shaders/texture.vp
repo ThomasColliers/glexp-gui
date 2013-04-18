@@ -5,9 +5,9 @@ uniform mat4 mvpMatrix;
 in vec4 vVertex;
 in vec2 vTexCoord;
 
-out vec2 vTex;
+smooth out vec2 vTex;
 
 void main(void){
     vTex = vTexCoord;
-    gl_Position = mvpMatrix * vVertex;
+    gl_Position = vVertex;
 }

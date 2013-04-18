@@ -1,8 +1,8 @@
 #include <iostream>
 #include <vector>
+#include <stdlib.h>
 #include <GL/glew.h>
 #include <GL/glfw.h>
-#include <IL/ilut.h>
 #include "berkelium/Berkelium.hpp"
 #include "berkelium/Window.hpp"
 #include "berkelium/WindowDelegate.hpp"
@@ -12,7 +12,9 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Set up quad and shader to use texture
+// TODO: Set up quad and shader to use texture (doesn't work atm)
+// TODO: Try filling a texture with junk data and using that?
+
 // TODO: Load in Berkelium texture, update each frame
 // TODO: Transparency testing
 // TODO: Multiple windows
@@ -28,8 +30,9 @@ GLTextureWindow* texture_window;
 ShaderManager* shaderManager;
 Batch* quad;
 GLuint shader;
-GLuint locMatrix;
-GLuint locTextureUnit;
+GLint locMatrix;
+GLint locTexture;
+GLuint texture;
 
 void setupContext(void){
     // clearing color
@@ -57,7 +60,7 @@ void setupContext(void){
         std::cerr << "Shader build failed..." << std::endl;
     }
     locMatrix = glGetUniformLocation(shader, "mvpMatrix");
-    locTextureUnit = glGetUniformLocation(shader, "textureUnit");
+    locTexture = glGetUniformLocation(shader, "textureUnit");
 
     // setup quad
     quad = new Batch();
@@ -87,15 +90,53 @@ void setupContext(void){
     quad->copyColorData4f(colors);
     quad->end();
 
-    // setup texture
-    ilInit();
-    iluInit();
-    ilutRenderer(ILUT_OPENGL);
-    ILuint imageName;
-    ilGenImages(1, &imageName);
-    ilBindImage(imageName);
-    ilLoadImage("texture.tga");
+    //texture = ilutGLLoadImage("texture.tga");
+    glActiveTexture(GL_TEXTURE0);
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
+
+    GLbyte bits[512*512*4];
+    for(int i = 0; i < (512*512*4)/2; i++){
+        bits[i] = rand() % 127; 
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);
+
+
+    /*if(glfwLoadTexture2D("texture.tga",NULL)){
+        std::cout << "Texture loaded" << std::endl;
+    }else{
+        std::cout << "Texture not loaded" << std::endl;
+    }*/
+
+    /*glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+    GLbyte* bits = new GLbyte[512*512*4];
+    for(int i = 0; i < 512*512*4; i++){
+        bits[i] = rand() % 8; 
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);
+    delete bits;*/
+
+    //ilLoadImage("texture.tga");
+    //texture = ilutGLBindTexImage();
+    //ilDeleteImages(1, &imageName); // TODO: enable this
+    // TODO: tweak
+    /*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
+    // TODO: generate mipmaps?
+    // glGenerateMipmap(GL_TEXTURE_2D);
 }
 
 void receiveInput(){
@@ -120,8 +161,10 @@ void render(void){
     Berkelium::update();
     // use program
     glUseProgram(shader);
-    /*GLfloat color[] = {1.0f, 0.0f, 0.0f, 1.0f};
-    glUniform4fv(locColor,1,color);*/
+    glEnable(GL_BLEND);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(locTexture, 0);
     quad->draw();
 }
 
