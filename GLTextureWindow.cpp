@@ -1,5 +1,6 @@
 #include "GLTextureWindow.h"
 #include <iostream>
+#include <string.h>
 
 GLTextureWindow::GLTextureWindow(unsigned int w, unsigned int h, bool transp, bool verb):
     width(w),height(h),needs_full_refresh(true),verbose(verb){
@@ -44,8 +45,79 @@ void GLTextureWindow::clear(void){
 void GLTextureWindow::onPaint(Berkelium::Window* win, const unsigned char* bitmap_in, const Berkelium::Rect &bitmap_rect,
     size_t num_copy_rects, const Berkelium::Rect* copy_rects, int dx, int dy, const Berkelium::Rect &scroll_rect){
     
-    // handle painting
-    //std::cout << "Paint" << std::endl;
+    const int bytesPerPixel = 4;
+
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    // if full refresh is needed, wait for a full update
+    if(needs_full_refresh){
+        if(bitmap_rect.left() != 0 || bitmap_rect.top() != 0 || (unsigned)bitmap_rect.right() != width || (unsigned)bitmap_rect.bottom() != height){
+            return;
+        }
+        // full update received and needed, draw to texture
+        std::cout << "full paint" << std::endl;
+        glTexImage2D(GL_TEXTURE_2D, 0, bytesPerPixel, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, bitmap_in);
+        needs_full_refresh = false;
+        return;
+    }
+
+    // first, handle scrolling because we need to shift existing data
+    if(dx != 0 || dy != 0){
+        // scroll_rect contains the rect we need to move, so figure out where data is moved by translating it
+        Berkelium::Rect scrolled_rect = scroll_rect.translate(-dx, -dy);
+        // next figure out where they intersec to find scrolled region
+        Berkelium::Rect scrolled_shared_rect = scroll_rect.intersect(scrolled_rect);
+        // only do scrolling with non-zero intersection
+        if(scrolled_shared_rect.width() > 0 && scrolled_shared_rect.height() > 0){
+            // scroll is performed by moving shared_rect
+            Berkelium::Rect shared_rect = scrolled_shared_rect.translate(dx, dy);
+
+            int wid = scrolled_shared_rect.width();
+            int hig = scrolled_shared_rect.height();
+            if(verbose)
+                std::cout << "Scroll rect: w=" << wid << ", h=" << hig << ", (" << scrolled_shared_rect.left() << "," << scrolled_shared_rect.top() << ") by (" << dx << "," << dy << ")" << std::endl;
+            int inc = 1;
+            char *outputBuffer = scroll_buffer;
+            // source data is offset by 1 line to prevent memcpy aliasing (can happen if dy == 0 and dx != 0)
+            char *inputBuffer = scroll_buffer+(width*1*bytesPerPixel);
+            int jj = 0;
+            if(dy > 0){
+                // shift the buffer around so that we start in the extra row at the end and copy in reverse so that we don't cobber source data
+                outputBuffer = scroll_buffer+((scrolled_shared_rect.top()+hig+1)*width-hig*wid)*bytesPerPixel;
+                inputBuffer = scroll_buffer;
+                inc = -1;
+                jj = hig-1;
+            }
+            // copy data out of texture
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_BGRA, GL_UNSIGNED_BYTE, inputBuffer);
+            // manually copy out the region to the beginning of the buffer
+            for(; jj << hig && jj >= 0; jj+=inc){
+                memcpy(outputBuffer+(jj*wid)*bytesPerPixel,
+                    inputBuffer+((scrolled_shared_rect.top()+jj)*width+scrolled_shared_rect.left())*bytesPerPixel,
+                    wid*bytesPerPixel);
+            }
+            // push it back into the texture in the right location
+            glTexSubImage2D(GL_TEXTURE_2D, 0, shared_rect.left(), shared_rect.top(), shared_rect.width(), shared_rect.height(), GL_BGRA, GL_UNSIGNED_BYTE, outputBuffer);
+        }
+    }
+    
+    std::cout << "partial paint" << std::endl;
+
+    // painting rects
+    if(verbose)
+        std::cout << (void*)win << " bitmap rect: w=" << bitmap_rect.width() << ", h=" << bitmap_rect.height() << ", (" << bitmap_rect.top() << "," << bitmap_rect.left() << ") tex size " << width << "x" << height << std::endl;
+    for(size_t i = 0; i < num_copy_rects; i++){
+        int wid = copy_rects[i].width();
+        int hig = copy_rects[i].height();
+        int top = copy_rects[i].top() - bitmap_rect.top();
+        int left = copy_rects[i].left() - bitmap_rect.left();
+        for(int jj = 0; jj < hig; jj++){
+            memcpy(scroll_buffer + jj*wid*bytesPerPixel,
+                bitmap_in + (left + (jj + top) * bitmap_rect.width()) * bytesPerPixel,
+                wid * bytesPerPixel
+            );
+        }
+        glTexSubImage2D(GL_TEXTURE_2D, 0, copy_rects[i].left(), copy_rects[i].top(), wid, hig, GL_BGRA, GL_UNSIGNED_BYTE, scroll_buffer);
+    }
 
     needs_full_refresh = false;
 }

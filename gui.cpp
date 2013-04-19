@@ -12,9 +12,6 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Set up quad and shader to use texture (doesn't work atm)
-// TODO: Try filling a texture with junk data and using that?
-
 // TODO: Load in Berkelium texture, update each frame
 // TODO: Transparency testing
 // TODO: Multiple windows
@@ -39,6 +36,7 @@ void setupContext(void){
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     // depth testing
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
     // culling
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
@@ -90,8 +88,22 @@ void setupContext(void){
     quad->copyColorData4f(colors);
     quad->end();
 
-    //texture = ilutGLLoadImage("texture.tga");
+    // initialize berkelium
+    if(!Berkelium::init(Berkelium::FileString::empty())){
+        std::cout << "Failed to initialize Berkelium!" << std::endl;
+    }
+    // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
+    texture_window = new GLTextureWindow(200,100,false,true);
+    texture = texture_window->texture();
+    texture_window->window()->focus(); // TODO: check wat dit doet?
+    // load page into the window
+    texture_window->clear();
+    std::string url("http://thomascolliers.com");
+    texture_window->window()->navigateTo(url.data(),url.length());
+
+    //texture = ilutGLLoadImage("texture.tga");
+    /*glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
@@ -102,41 +114,16 @@ void setupContext(void){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
-
-
     GLbyte bits[512*512*4];
     for(int i = 0; i < (512*512*4)/2; i++){
         bits[i] = rand() % 127; 
     }
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);
-
-
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);*/
     /*if(glfwLoadTexture2D("texture.tga",NULL)){
         std::cout << "Texture loaded" << std::endl;
     }else{
         std::cout << "Texture not loaded" << std::endl;
     }*/
-
-    /*glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    //glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-    GLbyte* bits = new GLbyte[512*512*4];
-    for(int i = 0; i < 512*512*4; i++){
-        bits[i] = rand() % 8; 
-    }
-    glTexImage2D(GL_TEXTURE_2D, 0, 4, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);
-    delete bits;*/
-
-    //ilLoadImage("texture.tga");
-    //texture = ilutGLBindTexImage();
-    //ilDeleteImages(1, &imageName); // TODO: enable this
-    // TODO: tweak
-    /*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
-    // TODO: generate mipmaps?
-    // glGenerateMipmap(GL_TEXTURE_2D);
 }
 
 void receiveInput(){
@@ -161,7 +148,6 @@ void render(void){
     Berkelium::update();
     // use program
     glUseProgram(shader);
-    glEnable(GL_BLEND);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(locTexture, 0);
@@ -205,18 +191,6 @@ int main(void){
         std::cerr << "Glew error: " << glewGetErrorString(err) << std::endl;
         return -1;
     }
-
-    // initialize berkelium
-    if(!Berkelium::init(Berkelium::FileString::empty())){
-        std::cout << "Failed to initialize Berkelium!" << std::endl;
-    }
-    // create a berkelium window
-    texture_window = new GLTextureWindow(200,100,false,false);
-    texture_window->window()->focus(); // TODO: check wat dit doet?
-    // load page into the window
-    texture_window->clear();
-    std::string url("http://thomascolliers.com");
-    texture_window->window()->navigateTo(url.data(),url.length());
 
     // setup context
     setupContext();
