@@ -94,7 +94,7 @@ void setupContext(void){
     }
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
-    texture_window = new GLTextureWindow(200,100,false,true);
+    texture_window = new GLTextureWindow(800,600,false,true);
     texture = texture_window->texture();
     texture_window->window()->focus(); // TODO: check wat dit doet?
     // load page into the window

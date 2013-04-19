@@ -47,6 +47,11 @@ void GLTextureWindow::onPaint(Berkelium::Window* win, const unsigned char* bitma
     
     const int bytesPerPixel = 4;
 
+    if(verbose){
+        std::cout << (void*)win << " bitmap rect: w=" << bitmap_rect.width() << ", h=" << bitmap_rect.height() << ", (" << bitmap_rect.top() << "," << bitmap_rect.left() << ") tex size " << width << "x" << height << std::endl;
+        //std::cout << "bmp: " << &bitmap_in << std::endl;
+    }
+
     glBindTexture(GL_TEXTURE_2D, texture_id);
     // if full refresh is needed, wait for a full update
     if(needs_full_refresh){
@@ -54,8 +59,8 @@ void GLTextureWindow::onPaint(Berkelium::Window* win, const unsigned char* bitma
             return;
         }
         // full update received and needed, draw to texture
-        std::cout << "full paint" << std::endl;
-        glTexImage2D(GL_TEXTURE_2D, 0, bytesPerPixel, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, bitmap_in);
+        if(verbose) std::cout << "Doing full paint" << std::endl;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap_in);
         needs_full_refresh = false;
         return;
     }
@@ -100,11 +105,9 @@ void GLTextureWindow::onPaint(Berkelium::Window* win, const unsigned char* bitma
         }
     }
     
-    std::cout << "partial paint" << std::endl;
+    if(verbose) std::cout << "Doing partial paint" << std::endl;
 
     // painting rects
-    if(verbose)
-        std::cout << (void*)win << " bitmap rect: w=" << bitmap_rect.width() << ", h=" << bitmap_rect.height() << ", (" << bitmap_rect.top() << "," << bitmap_rect.left() << ") tex size " << width << "x" << height << std::endl;
     for(size_t i = 0; i < num_copy_rects; i++){
         int wid = copy_rects[i].width();
         int hig = copy_rects[i].height();
