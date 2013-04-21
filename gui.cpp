@@ -59,6 +59,7 @@ void setupContext(void){
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // setup the transform pipeline
+    transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
     cameraFrame.moveForward(-5.0f);
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
