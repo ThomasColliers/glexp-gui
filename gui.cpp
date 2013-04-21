@@ -16,13 +16,14 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Render using perspective shader
-// TODO: Transparency testing
+// TODO: camera moved forward, klopt niet, texture compleet flipped
+// TODO: Try mipmapping & better anisotropy
 // TODO: Multiple windows test
-// TODO: Interaction
-// TODO: Interaction on arbitrary surfaces (like a sphere)
+// TODO: Transparency testing
+// TODO: Interaction (on arbitrary surfaces like a sphere)
 // TODO: Render to overlay
 // TODO: Javascript interaction
+// TODO: Add window to switch models, that window will be in orthographic projection on top of everything else
 
 int mouse_x, mouse_y;
 int window_w, window_h;
@@ -36,6 +37,7 @@ GLint locMatrix;
 GLint locTexture;
 GLuint texture;
 // transformation stuff
+gliby::Frame objectFrame;
 gliby::Frame cameraFrame;
 gliby::Frustum viewFrustum;
 gliby::TransformPipeline transformPipeline;
@@ -47,20 +49,21 @@ void setupContext(void){
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     // depth testing
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
+    // blendmode
+    /*glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
     // culling
+    /*glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
+    glFrontFace(GL_CCW);*/
     // set up maxed out anisotropic filtering
     GLfloat largest;
     glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &largest);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, largest);
-    // blendmode
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
-    cameraFrame.moveForward(-5.0f);
+    cameraFrame.moveForward(20.0f);
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
     modelViewMatrix.loadIdentity();
@@ -71,7 +74,7 @@ void setupContext(void){
     searchPath->push_back("/home/ego/projects/personal/gliby/shaders/");
     shaderManager = new gliby::ShaderManager(searchPath);
     gliby::ShaderAttribute attrs[] = {{0,"vVertex"},{3,"vTexCoord"}};
-    shader = shaderManager->buildShaderPair("texture.vp","texture.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
+    shader = shaderManager->buildShaderPair("simple_perspective.vp","simple_perspective.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
     if(shader == 0){
         std::cerr << "Shader build failed..." << std::endl;
     }
@@ -81,13 +84,13 @@ void setupContext(void){
     // setup quad
     quad = new gliby::Batch();
     quad->begin(GL_TRIANGLE_FAN, 4, 1);
-    float x = 0.1; float y = 0.1;
-    float width = 0.8; float height = 0.8;
+    float z = 0.0f;
+    float width = 10.0f; float height = 10.0f;
     GLfloat verts[] = {
-        x, y, 0.0f,
-        x, y-height, 0.0f,
-        x + width, y - height, 0.0f,
-        x + width, y, 0.0f
+        -width/2, height/2, z,
+        -width/2, -height/2, z,
+        width/2, -height/2, z,
+        width/2, height/2, z
     };
     GLfloat texcoords[] = {
         0.0f, 0.0f,
@@ -165,12 +168,30 @@ void render(void){
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     // update berkelium
     Berkelium::update();
-    // use program
+
+    // draw quad
     glUseProgram(shader);
+    // matrix
+    modelViewMatrix.pushMatrix();
+    Math3D::Matrix44f mObject;
+    //objectFrame.rotateLocal(0.01f, 0.0f, 1.0f, 0.0f);
+    objectFrame.getMatrix(mObject);
+    modelViewMatrix.multMatrix(mObject);
+    cameraFrame.moveForward(-20.0f);
+    cameraFrame.rotateWorld(0.005f, 0.0f, 1.0f, 0.0f);
+    cameraFrame.moveForward(20.0f);
+    Math3D::Matrix44f mCamera;
+    cameraFrame.getCameraMatrix(mCamera);
+    modelViewMatrix.multMatrix(mCamera);
+    glUniformMatrix4fv(locMatrix, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
+    // texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(locTexture, 0);
+    //draw
     quad->draw();
+    // pop matrix
+    modelViewMatrix.popMatrix();
 }
 
 void resize(int width, int height){
