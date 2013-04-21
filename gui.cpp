@@ -9,27 +9,38 @@
 
 #include "Batch.h"
 #include "ShaderManager.h"
+#include "Frame.h"
+#include "Frustum.h"
+#include "TransformPipeline.h"
+#include "MatrixStack.h"
 
 #include "GLTextureWindow.h"
 
-// TODO: Load in Berkelium texture, update each frame
+// TODO: Render using perspective shader
 // TODO: Transparency testing
-// TODO: Multiple windows
+// TODO: Multiple windows test
 // TODO: Interaction
 // TODO: Interaction on arbitrary surfaces (like a sphere)
 // TODO: Render to overlay
-// TODO: Mipmapping performance?
 // TODO: Javascript interaction
 
 int mouse_x, mouse_y;
 int window_w, window_h;
 GLTextureWindow* texture_window;
-ShaderManager* shaderManager;
-Batch* quad;
+// geometry
+gliby::Batch* quad;
+// shader & texture stuff
+gliby::ShaderManager* shaderManager;
 GLuint shader;
 GLint locMatrix;
 GLint locTexture;
 GLuint texture;
+// transformation stuff
+gliby::Frame cameraFrame;
+gliby::Frustum viewFrustum;
+gliby::TransformPipeline transformPipeline;
+gliby::MatrixStack modelViewMatrix;
+gliby::MatrixStack projectionMatrix;
 
 void setupContext(void){
     // clearing color
@@ -47,13 +58,19 @@ void setupContext(void){
     // blendmode
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // setup the transform pipeline
+    cameraFrame.moveForward(-5.0f);
+    viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
+    projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
+    modelViewMatrix.loadIdentity();
+
     // setup shader
     std::vector<const char*>* searchPath = new std::vector<const char*>();
     searchPath->push_back("./shaders/");
     searchPath->push_back("/home/ego/projects/personal/gliby/shaders/");
-    shaderManager = new ShaderManager(searchPath);
-    ShaderAttribute attrs[] = {{0,"vVertex"},{3,"vTexCoord"}};
-    shader = shaderManager->buildShaderPair("texture.vp","texture.fp",sizeof(attrs)/sizeof(ShaderAttribute),attrs);
+    shaderManager = new gliby::ShaderManager(searchPath);
+    gliby::ShaderAttribute attrs[] = {{0,"vVertex"},{3,"vTexCoord"}};
+    shader = shaderManager->buildShaderPair("texture.vp","texture.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
     if(shader == 0){
         std::cerr << "Shader build failed..." << std::endl;
     }
@@ -61,7 +78,7 @@ void setupContext(void){
     locTexture = glGetUniformLocation(shader, "textureUnit");
 
     // setup quad
-    quad = new Batch();
+    quad = new gliby::Batch();
     quad->begin(GL_TRIANGLE_FAN, 4, 1);
     float x = 0.1; float y = 0.1;
     float width = 0.8; float height = 0.8;
@@ -94,13 +111,14 @@ void setupContext(void){
     }
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
-    texture_window = new GLTextureWindow(800,600,false,true);
+    texture_window = new GLTextureWindow(800,600,false,false);
     texture = texture_window->texture();
     texture_window->window()->focus(); // TODO: check wat dit doet?
     // load page into the window
     texture_window->clear();
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
+
 
     //texture = ilutGLLoadImage("texture.tga");
     /*glActiveTexture(GL_TEXTURE0);
@@ -157,7 +175,11 @@ void render(void){
 void resize(int width, int height){
     window_w = width;
     window_h = height;
+    // update gl viewport
     glViewport(0,0,window_w,window_h);
+    // update projection matrix
+    viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
+    projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
 }
 
 int main(void){
@@ -179,6 +201,7 @@ int main(void){
         std::cerr << "GLFW window opening failed" << std::endl;
         return -1;
     }
+    window_w = 800; window_h = 600;
     glfwSetKeyCallback(keyCallback);
     glfwSetMouseButtonCallback(mouseCallback);
     glfwSetWindowSizeCallback(resize);

@@ -15,7 +15,7 @@ build/%.o : %.cpp
 build/gliby/%.o : /home/ego/projects/personal/gliby/src/%.cpp
 	$(CC) -o $@ -c $(CPPFLAGS) $(CXXFLAGS) $<
 
-$(MAIN) : build/$(MAIN).o build/GLTextureWindow.o build/gliby/Batch.o build/gliby/ShaderManager.o
+$(MAIN) : build/$(MAIN).o build/GLTextureWindow.o build/gliby/Batch.o build/gliby/ShaderManager.o build/gliby/Frame.o build/gliby/Math3D.o build/gliby/Frustum.o build/gliby/MatrixStack.o build/gliby/TransformPipeline.o
 	$(CC) -o $(MAIN) $^ $(LIBS)
 
 .PHONY: clean
