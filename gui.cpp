@@ -52,13 +52,9 @@ void setupContext(void){
     /*glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
     // culling
-    glEnable(GL_CULL_FACE);
+    /*glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-    // set up maxed out anisotropic filtering
-    GLfloat largest;
-    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &largest);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, largest);
+    glFrontFace(GL_CCW);*/
 
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
@@ -114,7 +110,7 @@ void setupContext(void){
     }
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
-    texture_window = new GLTextureWindow(800,600,false,false);
+    texture_window = new GLTextureWindow(600,600,false,false);
     texture = texture_window->texture();
     texture_window->window()->focus(); // TODO: check wat dit doet?
     // load page into the window
@@ -173,7 +169,7 @@ void render(void){
     // matrix
     modelViewMatrix.pushMatrix();
     cameraFrame.moveForward(3.0f);
-    cameraFrame.rotateWorld(0.005f, 0.0f, 1.0f, 0.0f);
+    cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
     cameraFrame.moveForward(-3.0f);
     Math3D::Matrix44f mCamera;
     cameraFrame.getCameraMatrix(mCamera);
