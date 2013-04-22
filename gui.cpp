@@ -16,7 +16,6 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: camera moved forward, klopt niet, texture compleet flipped
 // TODO: Try mipmapping & better anisotropy
 // TODO: Multiple windows test
 // TODO: Transparency testing
@@ -53,9 +52,9 @@ void setupContext(void){
     /*glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
     // culling
-    /*glEnable(GL_CULL_FACE);
+    glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);*/
+    glFrontFace(GL_CCW);
     // set up maxed out anisotropic filtering
     GLfloat largest;
     glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &largest);
@@ -63,10 +62,10 @@ void setupContext(void){
 
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
-    cameraFrame.moveForward(20.0f);
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
     modelViewMatrix.loadIdentity();
+    cameraFrame.moveForward(-3.0f);
 
     // setup shader
     std::vector<const char*>* searchPath = new std::vector<const char*>();
@@ -85,7 +84,7 @@ void setupContext(void){
     quad = new gliby::Batch();
     quad->begin(GL_TRIANGLE_FAN, 4, 1);
     float z = 0.0f;
-    float width = 10.0f; float height = 10.0f;
+    float width = 1.0f; float height = 1.0f;
     GLfloat verts[] = {
         -width/2, height/2, z,
         -width/2, -height/2, z,
@@ -173,13 +172,9 @@ void render(void){
     glUseProgram(shader);
     // matrix
     modelViewMatrix.pushMatrix();
-    Math3D::Matrix44f mObject;
-    //objectFrame.rotateLocal(0.01f, 0.0f, 1.0f, 0.0f);
-    objectFrame.getMatrix(mObject);
-    modelViewMatrix.multMatrix(mObject);
-    cameraFrame.moveForward(-20.0f);
+    cameraFrame.moveForward(3.0f);
     cameraFrame.rotateWorld(0.005f, 0.0f, 1.0f, 0.0f);
-    cameraFrame.moveForward(20.0f);
+    cameraFrame.moveForward(-3.0f);
     Math3D::Matrix44f mCamera;
     cameraFrame.getCameraMatrix(mCamera);
     modelViewMatrix.multMatrix(mCamera);
