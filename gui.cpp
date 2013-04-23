@@ -16,7 +16,6 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: 2 planes met rug op mekaar plakken (lijkt me niet te lukken momenteel)
 // TODO: Interaction (on arbitrary surfaces like a sphere)
 // TODO: Render to overlay
 // TODO: Javascript interaction
@@ -52,7 +51,7 @@ void setupContext(void){
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     // culling
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
@@ -62,8 +61,7 @@ void setupContext(void){
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
     modelViewMatrix.loadIdentity();
     cameraFrame.moveForward(-3.0f);
-    objectFrame.moveForward(1.0f);
-    objectFrame.rotateWorld(degToRad(140.0f), 0.0f, 1.0f, 0.0f);
+    objectFrame.rotateWorld(degToRad(0.0f), 0.0f, 1.0f, 0.0f);
 
     // setup shader
     std::vector<const char*>* searchPath = new std::vector<const char*>();
@@ -124,7 +122,8 @@ void setupContext(void){
     second_texture = second_window->texture();
     second_window->window()->focus();
     second_window->clear();
-    std::string url2("http://share.thomascolliers.com/pagetest/");
+    //std::string url2("http://share.thomascolliers.com/pagetest/");
+    std::string url2("http://google.be/");
     second_window->window()->navigateTo(url2.data(),url2.length());
 
     //texture = ilutGLLoadImage("texture.tga");
