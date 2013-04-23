@@ -16,9 +16,7 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Try mipmapping & better anisotropy
-// TODO: Multiple windows test
-// TODO: Transparency testing
+// TODO: 2 planes met rug op mekaar plakken (lijkt me niet te lukken momenteel)
 // TODO: Interaction (on arbitrary surfaces like a sphere)
 // TODO: Render to overlay
 // TODO: Javascript interaction
@@ -27,6 +25,7 @@
 int mouse_x, mouse_y;
 int window_w, window_h;
 GLTextureWindow* texture_window;
+GLTextureWindow* second_window;
 // geometry
 gliby::Batch* quad;
 // shader & texture stuff
@@ -35,6 +34,7 @@ GLuint shader;
 GLint locMatrix;
 GLint locTexture;
 GLuint texture;
+GLuint second_texture;
 // transformation stuff
 gliby::Frame objectFrame;
 gliby::Frame cameraFrame;
@@ -49,12 +49,12 @@ void setupContext(void){
     // depth testing
     glEnable(GL_DEPTH_TEST);
     // blendmode
-    /*glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     // culling
-    /*glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);*/
+    glFrontFace(GL_CCW);
 
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
@@ -62,6 +62,8 @@ void setupContext(void){
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
     modelViewMatrix.loadIdentity();
     cameraFrame.moveForward(-3.0f);
+    objectFrame.moveForward(1.0f);
+    objectFrame.rotateWorld(degToRad(140.0f), 0.0f, 1.0f, 0.0f);
 
     // setup shader
     std::vector<const char*>* searchPath = new std::vector<const char*>();
@@ -112,12 +114,18 @@ void setupContext(void){
     glActiveTexture(GL_TEXTURE0);
     texture_window = new GLTextureWindow(600,600,false,false);
     texture = texture_window->texture();
-    texture_window->window()->focus(); // TODO: check wat dit doet?
-    // load page into the window
+    texture_window->window()->focus(); // geeft (apparent?) input focus
     texture_window->clear();
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
 
+    // create second window
+    second_window = new GLTextureWindow(600,600,true,false);
+    second_texture = second_window->texture();
+    second_window->window()->focus();
+    second_window->clear();
+    std::string url2("http://share.thomascolliers.com/pagetest/");
+    second_window->window()->navigateTo(url2.data(),url2.length());
 
     //texture = ilutGLLoadImage("texture.tga");
     /*glActiveTexture(GL_TEXTURE0);
@@ -164,15 +172,17 @@ void render(void){
     // update berkelium
     Berkelium::update();
 
-    // draw quad
-    glUseProgram(shader);
-    // matrix
-    modelViewMatrix.pushMatrix();
+    // set up camera
     cameraFrame.moveForward(3.0f);
     cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
     cameraFrame.moveForward(-3.0f);
     Math3D::Matrix44f mCamera;
     cameraFrame.getCameraMatrix(mCamera);
+
+    // draw quad
+    glUseProgram(shader);
+    // matrix
+    modelViewMatrix.pushMatrix();
     modelViewMatrix.multMatrix(mCamera);
     glUniformMatrix4fv(locMatrix, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
     // texture
@@ -182,6 +192,19 @@ void render(void){
     //draw
     quad->draw();
     // pop matrix
+    modelViewMatrix.popMatrix();
+
+    // set up object transformation
+    Math3D::Matrix44f mObject;
+    objectFrame.getMatrix(mObject);
+
+    // draw second quad
+    modelViewMatrix.pushMatrix();
+    modelViewMatrix.multMatrix(mCamera);
+    modelViewMatrix.multMatrix(mObject);
+    glUniformMatrix4fv(locMatrix, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
+    glBindTexture(GL_TEXTURE_2D, second_texture);
+    quad->draw();
     modelViewMatrix.popMatrix();
 }
 
