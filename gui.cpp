@@ -17,6 +17,37 @@
 #include "GLTextureWindow.h"
 
 // TODO: Interaction (on arbitrary surfaces like a sphere)
+//
+//First create a texture where you encode u and v in say r channel and
+//first half of g channel (12 bits) and for v on half of g and b
+//channels.
+//use this texture to draw you object (textured, but without mipmap and
+//without anti-aliasing) in the back buffer.
+//In order to know the texture coordinate under the mouse, just read the
+//back buffer pixel under the mouse, decode the rgb in uv and you got
+//it.
+//the drawback of this method is you need to draw your scene twice. one
+//with the scene, one only in the back buffer with the special texture.
+//
+// OR:
+//
+//The problem is best solved outside OGL. If you got your data set, you
+//have triangles with vertex positions. Intersect a ray, find which
+//triangle it hits and use the barycentric coordinate to compute any
+//gradient aka. varying at the point of intersection.
+//
+//You need the projection matrix to map the pixel coordinate into view
+//coordinate. Then you need the inverse of the modelview matrix to map
+//the view coordinate into model coordinate. At this point the problem
+//is pretty much solved one.
+//
+//If you can store the scene/dataset hierarchically the intersection
+//computation should be be several orders of magnitude quicker than
+//asking feedback from the driver in a form or other, including the
+//already suggested techniques with the kind of datasets that the OGL
+//typically renders in the first place. YMMV, in which case something
+//more specific can be suggested.
+//
 // TODO: Render to overlay
 // TODO: Javascript interaction
 // TODO: Add window to switch models, that window will be in orthographic projection on top of everything else
@@ -30,10 +61,12 @@ gliby::Batch* quad;
 // shader & texture stuff
 gliby::ShaderManager* shaderManager;
 GLuint shader;
+GLuint uiTestShader;
 GLint locMatrix;
 GLint locTexture;
 GLuint texture;
 GLuint second_texture;
+GLuint locUiTestMatrix;
 // transformation stuff
 gliby::Frame objectFrame;
 gliby::Frame cameraFrame;
@@ -41,6 +74,9 @@ gliby::Frustum viewFrustum;
 gliby::TransformPipeline transformPipeline;
 gliby::MatrixStack modelViewMatrix;
 gliby::MatrixStack projectionMatrix;
+// additional framebuffers
+GLuint uiTestBuffer;
+GLuint uiTestRenderBuffers[3];
 
 void setupContext(void){
     // clearing color
@@ -55,6 +91,24 @@ void setupContext(void){
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
+    // create framebuffer for UI sampling
+    glGenFramebuffers(1, &uiTestBuffer); 
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, uiTestBuffer);
+    // 2 color buffers and a depth buffer
+    glGenRenderbuffers(2, uiTestRenderBuffers);
+    glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+    glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+    glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
+    // attach to fbo
+    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, uiTestRenderBuffers[0]);
+    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, uiTestRenderBuffers[1]);
+    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, uiTestRenderBuffers[2]);
+    // set default framebuffer back
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
@@ -63,18 +117,19 @@ void setupContext(void){
     cameraFrame.moveForward(-3.0f);
     objectFrame.rotateWorld(degToRad(0.0f), 0.0f, 1.0f, 0.0f);
 
-    // setup shader
+    // setup shaders
     std::vector<const char*>* searchPath = new std::vector<const char*>();
     searchPath->push_back("./shaders/");
     searchPath->push_back("/home/ego/projects/personal/gliby/shaders/");
     shaderManager = new gliby::ShaderManager(searchPath);
     gliby::ShaderAttribute attrs[] = {{0,"vVertex"},{3,"vTexCoord"}};
     shader = shaderManager->buildShaderPair("simple_perspective.vp","simple_perspective.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
-    if(shader == 0){
-        std::cerr << "Shader build failed..." << std::endl;
-    }
+    if(shader == 0) std::cerr << "Shader build failed..." << std::endl;
     locMatrix = glGetUniformLocation(shader, "mvpMatrix");
     locTexture = glGetUniformLocation(shader, "textureUnit");
+    uiTestShader = shaderManager->buildShaderPair("ui_test.vp","ui_test.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
+    if(uiTestShader == 0) std::cerr << "Shader build failed..." << std::endl;
+    //locUiTestMatrix = glGetUniformLocation(uiTestShader, "mvpMatrix");
 
     // setup quad
     quad = new gliby::Batch();
@@ -212,6 +267,15 @@ void resize(int width, int height){
     window_h = height;
     // update gl viewport
     glViewport(0,0,window_w,window_h);
+    // update render buffer sizes
+    if(uiTestBuffer){
+        glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+        glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+        glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
+    }
     // update projection matrix
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
