@@ -13,6 +13,7 @@
 #include "Frustum.h"
 #include "TransformPipeline.h"
 #include "MatrixStack.h"
+#include "Actor.h"
 
 #include "GLTextureWindow.h"
 
@@ -54,21 +55,11 @@
 
 int mouse_x, mouse_y;
 int window_w, window_h;
-GLTextureWindow* texture_window;
-GLTextureWindow* second_window;
-// geometry
-gliby::Batch* quad;
 // shader & texture stuff
 gliby::ShaderManager* shaderManager;
 GLuint shader;
 GLuint uiTestShader;
-GLint locMatrix;
-GLint locTexture;
-GLuint texture;
-GLuint second_texture;
-GLuint locUiTestMatrix;
 // transformation stuff
-gliby::Frame objectFrame;
 gliby::Frame cameraFrame;
 gliby::Frustum viewFrustum;
 gliby::TransformPipeline transformPipeline;
@@ -77,6 +68,8 @@ gliby::MatrixStack projectionMatrix;
 // additional framebuffers
 GLuint uiTestBuffer;
 GLuint uiTestRenderBuffers[3];
+// actors
+gliby::Actor* planes[2];
 
 void setupContext(void){
     // clearing color
@@ -115,7 +108,6 @@ void setupContext(void){
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
     modelViewMatrix.loadIdentity();
     cameraFrame.moveForward(-3.0f);
-    objectFrame.rotateWorld(degToRad(0.0f), 0.0f, 1.0f, 0.0f);
 
     // setup shaders
     std::vector<const char*>* searchPath = new std::vector<const char*>();
@@ -124,15 +116,10 @@ void setupContext(void){
     shaderManager = new gliby::ShaderManager(searchPath);
     gliby::ShaderAttribute attrs[] = {{0,"vVertex"},{3,"vTexCoord"}};
     shader = shaderManager->buildShaderPair("simple_perspective.vp","simple_perspective.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
-    if(shader == 0) std::cerr << "Shader build failed..." << std::endl;
-    locMatrix = glGetUniformLocation(shader, "mvpMatrix");
-    locTexture = glGetUniformLocation(shader, "textureUnit");
     uiTestShader = shaderManager->buildShaderPair("ui_test.vp","ui_test.fp",sizeof(attrs)/sizeof(gliby::ShaderAttribute),attrs);
-    if(uiTestShader == 0) std::cerr << "Shader build failed..." << std::endl;
-    //locUiTestMatrix = glGetUniformLocation(uiTestShader, "mvpMatrix");
 
     // setup quad
-    quad = new gliby::Batch();
+    gliby::Batch* quad = new gliby::Batch();
     quad->begin(GL_TRIANGLE_FAN, 4, 1);
     float z = 0.0f;
     float width = 1.0f; float height = 1.0f;
@@ -165,50 +152,27 @@ void setupContext(void){
     }
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
-    texture_window = new GLTextureWindow(600,600,false,false);
-    texture = texture_window->texture();
+    GLTextureWindow* texture_window = new GLTextureWindow(600,600,false,false);
+    //texture = texture_window->texture();
     texture_window->window()->focus(); // geeft (apparent?) input focus
     texture_window->clear();
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
-
     // create second window
-    second_window = new GLTextureWindow(600,600,true,false);
-    second_texture = second_window->texture();
+    GLTextureWindow* second_window = new GLTextureWindow(600,600,true,false);
+    //second_texture = second_window->texture();
     second_window->window()->focus();
     second_window->clear();
-    //std::string url2("http://share.thomascolliers.com/pagetest/");
     std::string url2("http://google.be/");
     second_window->window()->navigateTo(url2.data(),url2.length());
 
-    //texture = ilutGLLoadImage("texture.tga");
-    /*glActiveTexture(GL_TEXTURE0);
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    GLbyte bits[512*512*4];
-    for(int i = 0; i < (512*512*4)/2; i++){
-        bits[i] = rand() % 127; 
-    }
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);*/
-    /*if(glfwLoadTexture2D("texture.tga",NULL)){
-        std::cout << "Texture loaded" << std::endl;
-    }else{
-        std::cout << "Texture not loaded" << std::endl;
-    }*/
+    planes[0] = new gliby::Actor(quad,texture_window->texture()); 
+    planes[1] = new gliby::Actor(quad,second_window->texture());
+    planes[0]->getFrame().rotateWorld(degToRad(180.0f), 0.0f, 1.0f, 0.0f);
+    planes[1]->getFrame().rotateWorld(degToRad(0.0f), 0.0f, 1.0f, 0.0f);
 }
 
 void receiveInput(){
-    /*if(glfwGetKey(GLFW_KEY_ESC) == GLFW_PRESS){
-        glfwCloseWindow();
-    }*/
     glfwGetMousePos(&mouse_x, &mouse_y);
 }
 void keyCallback(int id, int state){
@@ -218,6 +182,31 @@ void keyCallback(int id, int state){
 }
 void mouseCallback(int id, int state){
     //std::cout << id << " " << state << std::endl;
+}
+
+void draw(GLuint sh){
+    // ui draw pass
+    glUseProgram(sh);
+    for(int i = 0; i < 2; i++){
+        // setup matrix
+        modelViewMatrix.pushMatrix();
+        Math3D::Matrix44f mObject;
+        planes[i]->getFrame().getMatrix(mObject);
+        modelViewMatrix.multMatrix(mObject);
+        // load correct texture
+        if(planes[i]->getTexture()) glBindTexture(GL_TEXTURE_2D, planes[i]->getTexture());
+        // set uniforms
+        GLint locMVP = glGetUniformLocation(sh,"mvpMatrix");
+        if(locMVP != -1) glUniformMatrix4fv(locMVP, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
+        GLint locTexture = glGetUniformLocation(sh,"textureUnit");
+        if(locTexture != -1) glUniform1i(locTexture, 0);
+        GLint locIndex = glGetUniformLocation(sh,"objectIndex");
+        if(locIndex != -1) glUniform1i(locIndex, i);
+        // draw
+        planes[i]->getGeometry().draw();
+        // clear matrix
+        modelViewMatrix.popMatrix();
+    }
 }
 
 void render(void){
@@ -232,34 +221,47 @@ void render(void){
     cameraFrame.moveForward(-3.0f);
     Math3D::Matrix44f mCamera;
     cameraFrame.getCameraMatrix(mCamera);
-
-    // draw quad
-    glUseProgram(shader);
-    // matrix
     modelViewMatrix.pushMatrix();
     modelViewMatrix.multMatrix(mCamera);
-    glUniformMatrix4fv(locMatrix, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
-    // texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(locTexture, 0);
-    //draw
-    quad->draw();
-    // pop matrix
+
+    //draw(uiTestShader);
+    draw(shader);
+
+    // pop off camera transformations
     modelViewMatrix.popMatrix();
 
-    // set up object transformation
+    /*cameraFrame.moveForward(3.0f);
+    cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
+    cameraFrame.moveForward(-3.0f);
+    Math3D::Matrix44f mCamera;
+    cameraFrame.getCameraMatrix(mCamera);
+
+    // set up mvp matrices for both panes
+    modelViewMatrix.pushMatrix();
+    modelViewMatrix.multMatrix(mCamera);
+    const Math3D::Matrix44f& mvpPlane1 = transformPipeline.getModelViewProjectionMatrix();
     Math3D::Matrix44f mObject;
     objectFrame.getMatrix(mObject);
-
-    // draw second quad
-    modelViewMatrix.pushMatrix();
-    modelViewMatrix.multMatrix(mCamera);
     modelViewMatrix.multMatrix(mObject);
-    glUniformMatrix4fv(locMatrix, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
-    glBindTexture(GL_TEXTURE_2D, second_texture);
-    quad->draw();
+    const Math3D::Matrix44f& mvpPlane2 = transformPipeline.getModelViewProjectionMatrix();
     modelViewMatrix.popMatrix();
+
+    // ui draw pass
+    // plane 1
+    glUseProgram(uiTestShader);
+    glUniformMatrix4fv(locUiTestMatrix, 1, GL_FALSE, mvpPlane1);
+    glUniform1i(locUiTestIndex, 0);
+    quad->draw();
+    // plane 2
+    glUniformMatrix4fv(locUiTestMatrix, 1, GL_FALSE, mvpPlane2);
+    glUniform1i(locUiTestIndex, 1);
+    quad->draw();*/
+
+
+    // texture
+    /*glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(locTexture, 0);*/
 }
 
 void resize(int width, int height){
