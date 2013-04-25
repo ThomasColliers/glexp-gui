@@ -6,7 +6,7 @@ uniform int objectIndex;
 
 smooth in vec2 vTex;
 
-out vec4 gl_FragColor;
+out vec4 gl_FragData[];
 
 vec3 valueToRGB(float val){
     vec3 c;
@@ -21,6 +21,12 @@ void main(void){
     vec4 indexColor;
     indexColor.rgb = valueToRGB(float(objectIndex)).rgb;
     indexColor.a = 1.0;
+    // pack the texture coordinates in an rgb value
+    vec4 texColor = vec4(0.0,0.0,0.0,1.0);
+    texColor[0] = vTex[0];
+    texColor[1] = vTex[1];
+    // TODO: for better accuracy I should use the b channel as well
 
-    gl_FragColor = indexColor; //vec4(1.0,0.0,0.0,0.0);
+    gl_FragData[0] = indexColor;
+    gl_FragData[1] = texColor;
 }

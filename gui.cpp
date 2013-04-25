@@ -17,41 +17,16 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Interaction (on arbitrary surfaces like a sphere)
-//
-//First create a texture where you encode u and v in say r channel and
-//first half of g channel (12 bits) and for v on half of g and b
-//channels.
-//use this texture to draw you object (textured, but without mipmap and
-//without anti-aliasing) in the back buffer.
-//In order to know the texture coordinate under the mouse, just read the
-//back buffer pixel under the mouse, decode the rgb in uv and you got
-//it.
-//the drawback of this method is you need to draw your scene twice. one
-//with the scene, one only in the back buffer with the special texture.
-//
-// OR:
-//
-//The problem is best solved outside OGL. If you got your data set, you
-//have triangles with vertex positions. Intersect a ray, find which
-//triangle it hits and use the barycentric coordinate to compute any
-//gradient aka. varying at the point of intersection.
-//
-//You need the projection matrix to map the pixel coordinate into view
-//coordinate. Then you need the inverse of the modelview matrix to map
-//the view coordinate into model coordinate. At this point the problem
-//is pretty much solved one.
-//
-//If you can store the scene/dataset hierarchically the intersection
-//computation should be be several orders of magnitude quicker than
-//asking feedback from the driver in a form or other, including the
-//already suggested techniques with the kind of datasets that the OGL
-//typically renders in the first place. YMMV, in which case something
-//more specific can be suggested.
-//
-// TODO: Render to overlay
+// TODO: Add a sphere or something to render to
+// TODO: Scrolling is broken
+// TODO: When opening a popup it switches to that window
+// TODO: Keyboard input
+// TODO: Scrollwheel input
 // TODO: Javascript interaction
-// TODO: Add window to switch models, that window will be in orthographic projection on top of everything else
+// TODO: Figure out why glReadPixel is so damn slow
+// TODO: Switch to higher resolution pixel buffer?
+
+const int WINDOW_RESOLUTION = 600;
 
 int mouse_x, mouse_y;
 int window_w, window_h;
@@ -68,12 +43,17 @@ gliby::MatrixStack projectionMatrix;
 // additional framebuffers
 GLuint uiTestBuffer;
 GLuint uiTestRenderBuffers[3];
+// texture windows
+GLTextureWindow* texture_window;
+GLTextureWindow* second_window;
 // actors
 gliby::Actor* planes[2];
+// keeps which object the mouse is over to determine where to send events
+int over_index = -1;
 
 void setupContext(void){
     // clearing color
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
     // depth testing
     glEnable(GL_DEPTH_TEST);
     // blendmode
@@ -90,9 +70,9 @@ void setupContext(void){
     // 2 color buffers and a depth buffer
     glGenRenderbuffers(2, uiTestRenderBuffers);
     glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
     glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
     glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
     // attach to fbo
@@ -152,14 +132,14 @@ void setupContext(void){
     }
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
-    GLTextureWindow* texture_window = new GLTextureWindow(600,600,false,false);
+    texture_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,false,false);
     //texture = texture_window->texture();
     texture_window->window()->focus(); // geeft (apparent?) input focus
     texture_window->clear();
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
     // create second window
-    GLTextureWindow* second_window = new GLTextureWindow(600,600,true,false);
+    second_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,true,false);
     //second_texture = second_window->texture();
     second_window->window()->focus();
     second_window->clear();
@@ -182,6 +162,12 @@ void keyCallback(int id, int state){
 }
 void mouseCallback(int id, int state){
     //std::cout << id << " " << state << std::endl;
+    if(id == 0 && over_index != -1){
+        GLTextureWindow* ref;
+        if(over_index == 0) ref = texture_window;
+        else ref = second_window;
+        ref->window()->mouseButton(0, state);
+    }
 }
 
 void draw(GLuint sh){
@@ -210,8 +196,6 @@ void draw(GLuint sh){
 }
 
 void render(void){
-    // clear
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     // update berkelium
     Berkelium::update();
 
@@ -224,44 +208,43 @@ void render(void){
     modelViewMatrix.pushMatrix();
     modelViewMatrix.multMatrix(mCamera);
 
-    //draw(uiTestShader);
+    // draw with test ui shader
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, uiTestBuffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, uiTestBuffer);
+    GLenum uiBufs[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+    glDrawBuffers(2, uiBufs);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    draw(uiTestShader);
+    // check if mouse is over geometry
+    GLubyte pixel_color[4];
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(window_w-mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
+    if(pixel_color[3] > 0){
+        over_index = pixel_color[0]; // TODO: this will break when index > 255
+        GLTextureWindow* ref;
+        if(over_index == 0) ref = texture_window;
+        else ref = second_window;
+        // retrieve texture coordinates
+        glReadBuffer(GL_COLOR_ATTACHMENT1);
+        glReadPixels(window_w-mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
+        float mousePos_x = (255.0f-(float)pixel_color[0])/255.0f;
+        float mousePos_y = (float)pixel_color[1]/255.0f;
+        ref->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
+    }else{
+        over_index = -1;
+    }
+    
+    // normal drawing
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    GLenum normBufs[] = { GL_BACK_LEFT };
+    glDrawBuffers(1, normBufs);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     draw(shader);
 
     // pop off camera transformations
     modelViewMatrix.popMatrix();
-
-    /*cameraFrame.moveForward(3.0f);
-    cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
-    cameraFrame.moveForward(-3.0f);
-    Math3D::Matrix44f mCamera;
-    cameraFrame.getCameraMatrix(mCamera);
-
-    // set up mvp matrices for both panes
-    modelViewMatrix.pushMatrix();
-    modelViewMatrix.multMatrix(mCamera);
-    const Math3D::Matrix44f& mvpPlane1 = transformPipeline.getModelViewProjectionMatrix();
-    Math3D::Matrix44f mObject;
-    objectFrame.getMatrix(mObject);
-    modelViewMatrix.multMatrix(mObject);
-    const Math3D::Matrix44f& mvpPlane2 = transformPipeline.getModelViewProjectionMatrix();
-    modelViewMatrix.popMatrix();
-
-    // ui draw pass
-    // plane 1
-    glUseProgram(uiTestShader);
-    glUniformMatrix4fv(locUiTestMatrix, 1, GL_FALSE, mvpPlane1);
-    glUniform1i(locUiTestIndex, 0);
-    quad->draw();
-    // plane 2
-    glUniformMatrix4fv(locUiTestMatrix, 1, GL_FALSE, mvpPlane2);
-    glUniform1i(locUiTestIndex, 1);
-    quad->draw();*/
-
-
-    // texture
-    /*glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(locTexture, 0);*/
 }
 
 void resize(int width, int height){
@@ -272,9 +255,9 @@ void resize(int width, int height){
     // update render buffer sizes
     if(uiTestBuffer){
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, window_w, window_h);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
     }
