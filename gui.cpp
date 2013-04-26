@@ -14,17 +14,18 @@
 #include "TransformPipeline.h"
 #include "MatrixStack.h"
 #include "Actor.h"
+#include "TriangleBatch.h"
+#include "GeometryFactory.h"
 
 #include "GLTextureWindow.h"
 
-// TODO: Add a sphere or something to render to
+// TODO: Figure out why glReadPixels is trashing my CPU
+// TODO: Use one of the color channels for object id?
+// TODO: Accuracy problems (need higher resolution color buffer?)
 // TODO: Scrolling is broken
 // TODO: When opening a popup it switches to that window
-// TODO: Keyboard input
-// TODO: Scrollwheel input
 // TODO: Javascript interaction
-// TODO: Figure out why glReadPixel is so damn slow
-// TODO: Switch to higher resolution pixel buffer?
+// TODO: Sometimes the vertex buffer seems corrupt at initialisation
 
 const int WINDOW_RESOLUTION = 600;
 
@@ -46,10 +47,9 @@ GLuint uiTestRenderBuffers[3];
 // texture windows
 GLTextureWindow* texture_window;
 GLTextureWindow* second_window;
+GLTextureWindow* over_window;
 // actors
-gliby::Actor* planes[2];
-// keeps which object the mouse is over to determine where to send events
-int over_index = -1;
+gliby::Actor* objs[3];
 
 void setupContext(void){
     // clearing color
@@ -125,6 +125,8 @@ void setupContext(void){
     quad->copyTexCoordData2f(texcoords,0);
     quad->copyColorData4f(colors);
     quad->end();
+    // setup sphere
+    gliby::TriangleBatch& sphereBatch = gliby::GeometryFactory::sphere(0.2f, 20, 20);
 
     // initialize berkelium
     if(!Berkelium::init(Berkelium::FileString::empty())){
@@ -145,11 +147,19 @@ void setupContext(void){
     second_window->clear();
     std::string url2("http://google.be/");
     second_window->window()->navigateTo(url2.data(),url2.length());
+    over_window = NULL;
 
+    gliby::Actor* planes[2];
     planes[0] = new gliby::Actor(quad,texture_window->texture()); 
     planes[1] = new gliby::Actor(quad,second_window->texture());
     planes[0]->getFrame().rotateWorld(degToRad(180.0f), 0.0f, 1.0f, 0.0f);
     planes[1]->getFrame().rotateWorld(degToRad(0.0f), 0.0f, 1.0f, 0.0f);
+    gliby::Actor* sphere = new gliby::Actor(&sphereBatch,texture_window->texture());
+    sphere->getFrame().moveForward(0.5);
+    sphere->getFrame().rotateWorld(degToRad(-90.0f), 1.0f, 0.0f, 0.0f);
+    objs[0] = planes[0];
+    objs[1] = planes[1];
+    objs[2] = sphere;
 }
 
 void receiveInput(){
@@ -160,27 +170,32 @@ void keyCallback(int id, int state){
         glfwCloseWindow();
     }
 }
+void charCallback(int character, int action){
+    if(over_window){
+        //std::cout << character << " " << action << std::endl;
+        wchar_t c[2];
+        c[0] = character;
+        c[1] = 0;
+        over_window->window()->textEvent(c,1);
+    }
+}
 void mouseCallback(int id, int state){
-    //std::cout << id << " " << state << std::endl;
-    if(id == 0 && over_index != -1){
-        GLTextureWindow* ref;
-        if(over_index == 0) ref = texture_window;
-        else ref = second_window;
-        ref->window()->mouseButton(0, state);
+    if(id == 0 && over_window){
+        over_window->window()->mouseButton(0, state);
     }
 }
 
 void draw(GLuint sh){
     // ui draw pass
     glUseProgram(sh);
-    for(int i = 0; i < 2; i++){
+    for(int i = 0; i < 3; i++){
         // setup matrix
         modelViewMatrix.pushMatrix();
         Math3D::Matrix44f mObject;
-        planes[i]->getFrame().getMatrix(mObject);
+        objs[i]->getFrame().getMatrix(mObject);
         modelViewMatrix.multMatrix(mObject);
         // load correct texture
-        if(planes[i]->getTexture()) glBindTexture(GL_TEXTURE_2D, planes[i]->getTexture());
+        if(objs[i]->getTexture()) glBindTexture(GL_TEXTURE_2D, objs[i]->getTexture());
         // set uniforms
         GLint locMVP = glGetUniformLocation(sh,"mvpMatrix");
         if(locMVP != -1) glUniformMatrix4fv(locMVP, 1, GL_FALSE, transformPipeline.getModelViewProjectionMatrix());
@@ -189,13 +204,23 @@ void draw(GLuint sh){
         GLint locIndex = glGetUniformLocation(sh,"objectIndex");
         if(locIndex != -1) glUniform1i(locIndex, i);
         // draw
-        planes[i]->getGeometry().draw();
+        objs[i]->getGeometry().draw();
         // clear matrix
         modelViewMatrix.popMatrix();
     }
 }
 
 void render(void){
+    // show framerate
+    static int frameCount = 0;
+    static long currentSecond = 0;
+    frameCount++;
+    if((int)glfwGetTime() > currentSecond){
+        std::cout << "Framerate: " << frameCount << std::endl;
+        frameCount = 0;
+        currentSecond = (int)glfwGetTime();
+    }
+
     // update berkelium
     Berkelium::update();
 
@@ -218,20 +243,19 @@ void render(void){
     // check if mouse is over geometry
     GLubyte pixel_color[4];
     glReadBuffer(GL_COLOR_ATTACHMENT0);
-    glReadPixels(window_w-mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
+    glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
     if(pixel_color[3] > 0){
-        over_index = pixel_color[0]; // TODO: this will break when index > 255
-        GLTextureWindow* ref;
-        if(over_index == 0) ref = texture_window;
-        else ref = second_window;
+        int over_index = pixel_color[0]; // TODO: this will break when index > 255
+        if(over_index == 1) over_window = second_window;
+        else over_window = texture_window;
         // retrieve texture coordinates
         glReadBuffer(GL_COLOR_ATTACHMENT1);
-        glReadPixels(window_w-mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
-        float mousePos_x = (255.0f-(float)pixel_color[0])/255.0f;
+        glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
+        float mousePos_x = (float)pixel_color[0]/255.0f;
         float mousePos_y = (float)pixel_color[1]/255.0f;
-        ref->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
+        over_window->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
     }else{
-        over_index = -1;
+        over_window = NULL;
     }
     
     // normal drawing
@@ -275,7 +299,7 @@ int main(void){
         std::cerr << "GLFW init failed" << std::endl;
         return -1;
     }
-    glfwSwapInterval(1);
+    glfwSwapInterval(1); // set to 0 to disable vsync, 1 to enable
     glfwOpenWindowHint(GLFW_FSAA_SAMPLES, 8);
     glfwOpenWindowHint(GLFW_OPENGL_VERSION_MAJOR, 4);
     glfwOpenWindowHint(GLFW_OPENGL_VERSION_MINOR, 3);
@@ -287,12 +311,13 @@ int main(void){
     }
     window_w = 800; window_h = 600;
     glfwSetKeyCallback(keyCallback);
+    glfwSetCharCallback(charCallback);
     glfwSetMouseButtonCallback(mouseCallback);
     glfwSetWindowSizeCallback(resize);
     glfwSetWindowTitle("gltest");
 
     // init glew
-    glewExperimental = GL_TRUE; // without this glGenVertexArrays() segfaults :/, should be fixed in GLEW 1.7
+    glewExperimental = GL_TRUE; // without this glGenVertexArrays() segfaults :/, should be fixed in GLEW 1.7?
     GLenum err = glewInit();
     if(err != GLEW_OK){
         std::cerr << "Glew error: " << glewGetErrorString(err) << std::endl;
