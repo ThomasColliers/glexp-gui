@@ -84,7 +84,7 @@ void setupContext(void){
     glGenBuffers(2, pixelBuffers);
     for(int i = 0; i < 2; i++){
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelBuffers[i]);
-        glBufferData(GL_PIXEL_PACK_BUFFER, 4 * window_w * window_h, NULL, GL_STREAM_READ); // TODO: why not GL_DYNAMIC_READ?
+        glBufferData(GL_PIXEL_PACK_BUFFER, 4, NULL, GL_STREAM_READ); // TODO: why not GL_DYNAMIC_READ?
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
     pbo_index = 0;
@@ -253,19 +253,18 @@ void render(void){
     int next_index = (pbo_index + 1) % 2;
     // read pixels from framebuffer to PBO
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelBuffers[pbo_index]);
-    glReadPixels(0, 0, window_w, window_h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     // map the pbo to process data by CPU
     glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelBuffers[next_index]);
     GLubyte* ptr = (GLubyte*)glMapBuffer(GL_PIXEL_PACK_BUFFER,GL_READ_ONLY);
     if(ptr){
-        int offset = (mouse_x*4)+((window_h-mouse_y)*window_w*4);
-        if((int)ptr[offset+3] > 0){
-            int over_index = (int)ptr[offset]; 
+        if((int)ptr[3] > 0){
+            int over_index = (int)ptr[0]; 
             if(over_index == 1) over_window = second_window;
             else over_window = texture_window;
             // retrieve texture coordinates
-            float mousePos_x = (float)ptr[offset+1]/256.0f;
-            float mousePos_y = (float)ptr[offset+2]/256.0f;
+            float mousePos_x = (float)ptr[1]/256.0f;
+            float mousePos_y = (float)ptr[2]/256.0f;
             over_window->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
         }else{
             over_window = NULL;
@@ -276,22 +275,6 @@ void render(void){
     }
     // back to conventional pixel operation
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-
-
-    // check if mouse is over geometry
-    /*GLubyte pixel_color[4];
-    glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
-    if(pixel_color[3] > 0){
-        int over_index = pixel_color[0]; // TODO: this will break when index > 255
-        if(over_index == 1) over_window = second_window;
-        else over_window = texture_window;
-        // retrieve texture coordinates
-        float mousePos_x = (float)pixel_color[1]/255.0f;
-        float mousePos_y = (float)pixel_color[2]/255.0f;
-        over_window->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
-    }else{
-        over_window = NULL;
-    }*/
     
     // normal drawing
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -314,14 +297,6 @@ void resize(int width, int height){
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
-    }
-    // update pbo too
-    if(pixelBuffers[0]){
-        for(int i = 0; i < 2; i++){
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelBuffers[i]);
-            glBufferData(GL_PIXEL_PACK_BUFFER, 4 * window_w * window_h, NULL, GL_STREAM_READ); // TODO: why not GL_DYNAMIC_READ?
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        }
     }
     // update projection matrix
     viewFrustum.setPerspective(35.0f, float(window_w)/float(window_h),1.0f,500.0f);
