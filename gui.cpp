@@ -20,7 +20,6 @@
 #include "GLTextureWindow.h"
 
 // TODO: Figure out why glReadPixels is trashing my CPU
-// TODO: Use one of the color channels for object id?
 // TODO: Accuracy problems (need higher resolution color buffer?)
 // TODO: Scrolling is broken
 // TODO: When opening a popup it switches to that window
@@ -43,7 +42,7 @@ gliby::MatrixStack modelViewMatrix;
 gliby::MatrixStack projectionMatrix;
 // additional framebuffers
 GLuint uiTestBuffer;
-GLuint uiTestRenderBuffers[3];
+GLuint uiTestRenderBuffers[2];
 // texture windows
 GLTextureWindow* texture_window;
 GLTextureWindow* second_window;
@@ -72,13 +71,10 @@ void setupContext(void){
     glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
     glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
-    glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
     // attach to fbo
     glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, uiTestRenderBuffers[0]);
-    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, uiTestRenderBuffers[1]);
-    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, uiTestRenderBuffers[2]);
+    glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, uiTestRenderBuffers[1]);
     // set default framebuffer back
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
@@ -236,23 +232,18 @@ void render(void){
     // draw with test ui shader
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, uiTestBuffer);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, uiTestBuffer);
-    GLenum uiBufs[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-    glDrawBuffers(2, uiBufs);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     draw(uiTestShader);
     // check if mouse is over geometry
     GLubyte pixel_color[4];
-    glReadBuffer(GL_COLOR_ATTACHMENT0);
     glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
     if(pixel_color[3] > 0){
         int over_index = pixel_color[0]; // TODO: this will break when index > 255
         if(over_index == 1) over_window = second_window;
         else over_window = texture_window;
         // retrieve texture coordinates
-        glReadBuffer(GL_COLOR_ATTACHMENT1);
-        glReadPixels(mouse_x, window_h-mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel_color);
-        float mousePos_x = (float)pixel_color[0]/255.0f;
-        float mousePos_y = (float)pixel_color[1]/255.0f;
+        float mousePos_x = (float)pixel_color[1]/255.0f;
+        float mousePos_y = (float)pixel_color[2]/255.0f;
         over_window->window()->mouseMoved(mousePos_x*WINDOW_RESOLUTION,mousePos_y*WINDOW_RESOLUTION);
     }else{
         over_window = NULL;
@@ -261,9 +252,6 @@ void render(void){
     // normal drawing
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glReadBuffer(GL_COLOR_ATTACHMENT0);
-    GLenum normBufs[] = { GL_BACK_LEFT };
-    glDrawBuffers(1, normBufs);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     draw(shader);
 
@@ -281,8 +269,6 @@ void resize(int width, int height){
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[0]);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
         glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[1]);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, window_w, window_h);
-        glBindRenderbuffer(GL_RENDERBUFFER, uiTestRenderBuffers[2]);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_w, window_h);
     }
     // update projection matrix
