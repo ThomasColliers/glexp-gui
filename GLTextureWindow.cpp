@@ -98,7 +98,7 @@ void GLTextureWindow::onPaint(Berkelium::Window* win, const unsigned char* bitma
             // copy data out of texture
             glGetTexImage(GL_TEXTURE_2D, 0, GL_BGRA, GL_UNSIGNED_BYTE, inputBuffer);
             // manually copy out the region to the beginning of the buffer
-            for(; jj << hig && jj >= 0; jj+=inc){
+            for(; jj < hig && jj >= 0; jj+=inc){
                 memcpy(outputBuffer+(jj*wid)*bytesPerPixel,
                     inputBuffer+((scrolled_shared_rect.top()+jj)*width+scrolled_shared_rect.left())*bytesPerPixel,
                     wid*bytesPerPixel);

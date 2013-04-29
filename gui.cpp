@@ -19,12 +19,10 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: Figure out why glReadPixels is trashing my CPU
-// TODO: Accuracy problems (need higher resolution color buffer?)
-// TODO: Scrolling is broken
 // TODO: When opening a popup it switches to that window
 // TODO: Javascript interaction
 // TODO: Sometimes the vertex buffer seems corrupt at initialisation
+// TODO: Accuracy problems (need higher resolution color buffer?)
 
 const int WINDOW_RESOLUTION = 600;
 
@@ -151,7 +149,7 @@ void setupContext(void){
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
     // create second window
-    second_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,true,false);
+    second_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,false,false);
     //second_texture = second_window->texture();
     second_window->window()->focus();
     second_window->clear();
