@@ -1,10 +1,16 @@
 #pragma once
 
 #include <GL/glew.h>
+#include <vector>
 #include "berkelium/Window.hpp"
 #include "berkelium/WindowDelegate.hpp"
 #include "berkelium/Context.hpp"
 #include "berkelium/ScriptUtil.hpp"
+
+struct CallbackHandler {
+    Berkelium::WideString funcName; 
+    void (*func)(void);
+};
 
 class GLTextureWindow : public Berkelium::WindowDelegate {
     public:
@@ -39,6 +45,7 @@ class GLTextureWindow : public Berkelium::WindowDelegate {
         virtual void onWidgetMove(Berkelium::Window* win, Berkelium::Widget* widget, int x, int y);
         virtual void onShowContextMenu(Berkelium::Window* win, const Berkelium::ContextMenuEventArgs& args);
         virtual void onJavascriptCallback(Berkelium::Window* win, void* replyMsg, Berkelium::URLString url, Berkelium::WideString funcName, Berkelium::Script::Variant *args, size_t numArgs);
+        void registerCallback(CallbackHandler* handler);
         virtual void onRunFileChooser(Berkelium::Window* win, int mode, Berkelium::WideString title, Berkelium::FileString defaultFile);
         virtual void onExternalHost(Berkelium::Window* win, Berkelium::WideString message, Berkelium::URLString origin, Berkelium::URLString target);
 
@@ -49,4 +56,5 @@ class GLTextureWindow : public Berkelium::WindowDelegate {
         bool needs_full_refresh;
         bool verbose;
         char* scroll_buffer;
+        std::vector<CallbackHandler*> handlers;
 };

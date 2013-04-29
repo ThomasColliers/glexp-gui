@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
+#include <string>
 #include <stdlib.h>
+#include <boost/filesystem.hpp>
 #include <GL/glew.h>
 #include <GL/glfw.h>
 #include "berkelium/Berkelium.hpp"
@@ -19,8 +21,6 @@
 
 #include "GLTextureWindow.h"
 
-// TODO: When opening a popup it switches to that window
-// TODO: Javascript interaction
 // TODO: Sometimes the vertex buffer seems corrupt at initialisation
 // TODO: Accuracy problems (need higher resolution color buffer?)
 
@@ -28,6 +28,7 @@ const int WINDOW_RESOLUTION = 600;
 
 int mouse_x, mouse_y;
 int window_w, window_h;
+std::string current_path;
 // shader & texture stuff
 gliby::ShaderManager* shaderManager;
 GLuint shader;
@@ -49,6 +50,12 @@ GLTextureWindow* second_window;
 GLTextureWindow* over_window;
 // actors
 gliby::Actor* objs[3];
+// rotate camera?
+bool rotateCamera;
+
+void stopCameraRotation(){
+    rotateCamera = false; 
+}
 
 void setupContext(void){
     // clearing color
@@ -87,8 +94,9 @@ void setupContext(void){
     }
     pbo_index = 0;
 
-    // init mouse position to 0
+    // init some vars
     mouse_x = 0; mouse_y = 0;
+    rotateCamera = true;
 
     // setup the transform pipeline
     transformPipeline.setMatrixStacks(modelViewMatrix,projectionMatrix);
@@ -143,18 +151,24 @@ void setupContext(void){
     // create a berkelium window
     glActiveTexture(GL_TEXTURE0);
     texture_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,false,false);
-    //texture = texture_window->texture();
     texture_window->window()->focus(); // geeft (apparent?) input focus
     texture_window->clear();
     std::string url("http://thomascolliers.com");
     texture_window->window()->navigateTo(url.data(),url.length());
+
     // create second window
-    second_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,false,false);
-    //second_texture = second_window->texture();
+    second_window = new GLTextureWindow(WINDOW_RESOLUTION,WINDOW_RESOLUTION,false,true);
     second_window->window()->focus();
+    // register callback handler
+    second_window->window()->addBindOnStartLoading(Berkelium::WideString::point_to(L"stopCameraRotation"),Berkelium::Script::Variant::bindFunction(Berkelium::WideString::point_to(L"stopCameraRotation"),false));
+    CallbackHandler* handler = new CallbackHandler({Berkelium::WideString::point_to(L"stopCameraRotation"),stopCameraRotation});
+    second_window->registerCallback(handler);
+    // load local file
     second_window->clear();
-    std::string url2("http://google.be/");
-    second_window->window()->navigateTo(url2.data(),url2.length());
+    std::string localurl = current_path;
+    localurl.insert(0, "file://");
+    localurl.append("/example.html");
+    second_window->window()->navigateTo(localurl.data(),localurl.length());
     over_window = NULL;
 
     gliby::Actor* planes[2];
@@ -233,9 +247,11 @@ void render(void){
     Berkelium::update();
 
     // set up camera
-    cameraFrame.moveForward(3.0f);
-    cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
-    cameraFrame.moveForward(-3.0f);
+    if(rotateCamera){
+        cameraFrame.moveForward(3.0f);
+        cameraFrame.rotateWorld(0.01f, 0.0f, 1.0f, 0.0f);
+        cameraFrame.moveForward(-3.0f);
+    }
     Math3D::Matrix44f mCamera;
     cameraFrame.getCameraMatrix(mCamera);
     modelViewMatrix.pushMatrix();
@@ -301,10 +317,14 @@ void resize(int width, int height){
     projectionMatrix.loadMatrix(viewFrustum.getProjectionMatrix());
 }
 
-int main(void){
+int main(int argc, char **argv){
     // enable vsync with an env hint to the driver
     //putenv((char*) "__GL_SYNC_TO_VBLANK=1");
     
+    // get current path
+
+    current_path = boost::filesystem::system_complete(argv[0]).parent_path().parent_path().string();
+
     // init glfw and window
     if(!glfwInit()){
         std::cerr << "GLFW init failed" << std::endl;

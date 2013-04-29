@@ -180,7 +180,8 @@ void GLTextureWindow::onCreatedWindow(Berkelium::Window* win, Berkelium::Window*
     if(initialRect.mWidth < 1 || initialRect.mHeight < 1){
         newWin->resize(width,height);
     }
-    newWin->setDelegate(this);
+    //newWin->setDelegate(this);
+    newWin->destroy();
 }
 void GLTextureWindow::onWidgetCreated(Berkelium::Window* win, Berkelium::Widget* widget, int zIndex){
     if(verbose) std::cout << "BK: Widget created " << widget << " index " << zIndex << std::endl;
@@ -232,7 +233,7 @@ void GLTextureWindow::onShowContextMenu(Berkelium::Window* win, const Berkelium:
 void GLTextureWindow::onJavascriptCallback(Berkelium::Window* win, void* replyMsg, Berkelium::URLString url, Berkelium::WideString funcName, Berkelium::Script::Variant *args, size_t numArgs){
     if(verbose){
         std::cout << "BK: Javascript callback at URL " << url << ", " << (replyMsg ? "synchronous" : "async") << std::endl;
-        std::cout << "  Function name: " << funcName << std::endl;
+        std::wcout << L"  Function name: " << funcName << std::endl;
         for(size_t i = 0; i < numArgs; i++){
             Berkelium::WideString jsonString = Berkelium::Script::toJSON(args[i]);
             std::wcout << "  Argument " << i << ": ";
@@ -247,6 +248,17 @@ void GLTextureWindow::onJavascriptCallback(Berkelium::Window* win, void* replyMs
             win->synchronousScriptReturn(replyMsg, numArgs ? args[0] : Berkelium::Script::Variant());
         }
     }
+    for(std::vector<CallbackHandler*>::size_type e = 0; e < handlers.size(); e++){
+        std::wcout << std::wstring(funcName.data(),funcName.length()) << std::endl;
+        std::wcout << handlers[e]->funcName << std::endl;
+        if(std::wstring(funcName.data(),funcName.length()) == std::wstring(handlers[e]->funcName.data(),handlers[e]->funcName.length())){
+            handlers[e]->func();
+        }
+    }
+}
+
+void GLTextureWindow::registerCallback(CallbackHandler* handler){
+    handlers.push_back(handler);
 }
 
 void GLTextureWindow::onRunFileChooser(Berkelium::Window* win, int mode, Berkelium::WideString title, Berkelium::FileString defaultFile){
